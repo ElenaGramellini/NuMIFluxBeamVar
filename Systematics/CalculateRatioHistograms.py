@@ -20,7 +20,10 @@ rootInputDir = os.environ['BeamVarPath']
 def getHisto(fileName, histoName,name):
     file   = TFile(fileName,"r")
     ttree  = file.Get("POT")
-    POT    = float(ttree.GetEntries())
+    POT = 0
+    for i in ttree:
+        POT += ttree.POT
+
     tmp0   = file.Get(histoName)
     tmp0.SetDirectory(gROOT)
     tmp0.SetTitle(name)
