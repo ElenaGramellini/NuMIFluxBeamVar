@@ -7,7 +7,7 @@ Setup your environement as follows
 
 If you're working on your local machine, you just need to setup the environmental variable
 
-> export  BeamVarPath='<the correct path>'
+> export  BeamVarPath='\<the correct path\>'
 
 to the location of the folder containing the beamline files.
 
