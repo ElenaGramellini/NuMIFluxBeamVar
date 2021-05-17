@@ -7,17 +7,54 @@
 ## output: the file w/ the flux histograms
 ####################################
 
-from ROOT import *
 import os
-from ROOT import SetOwnership
+import uproot
+import numpy as np
+import time
+import matplotlib.pyplot as plt
+import sys
+from scipy.stats import chisquare
 
 # Where are the inputFiles?
 rootInputDir = os.environ['BeamVarPath']
 
+fhcHisto = uproot.open(rootInputDir + "FHC/output_uboone_fhc_run0_merged.root")['nue/Detsmear/nue_CV_AV_TPC_5MeV_bin']
+rhcHisto = uproot.open(rootInputDir + "RHC/output_uboone_rhc_run0_merged.root")['nue/Detsmear/nue_CV_AV_TPC_5MeV_bin']
+
+binsRHC    = rhcHisto.bins
+valueRHC   = rhcHisto.values
+binsFHC    = fhcHisto.bins
+valueFHC   = fhcHisto.values
+ratio      = valueRHC/valueFHC
+
+if np.allclose(binsRHC,binsFHC):
+    print ("YAY")
+
+b = binsFHC[:,0]
+np.append(b, binsFHC[-1:,1])
+np.set_printoptions(threshold=sys.maxsize)
+#for i in range(1000):
+#    print(valueRHC[i], valueFHC[i])
+_ = plt.plot(b, ratio)
+plt.ylim(.5,3.0)
+plt.show()
+
+'''
+
+####### Let's fix the parameters here                                                                                                          
+histoName      = "ratio_run"+str(1)+"_"+str(current)+"_"+str(neutrino)+"_CV_AV_TPC_2D"
+thisHisto = thisFolder[histoName]
+energy_v = (thisHisto.edges)[0]
+angle_v  = (thisHisto.edges)[1]
+self.energyEdges[neutrino] = energy_v
+self.angleEdges[neutrino]  = angl
+            
+
+
 gStyle.SetOptStat(0)
 
 def getHisto(fileName, histoName,  color,style,pol="FHC"):
-    print(fileName)
+    print fileName
     file = TFile(fileName,"r")
     # Calculate POT for this file
     ttree  = file.Get("POT")
@@ -126,4 +163,5 @@ def __main__():
 
     
 __main__()
-input()
+raw_input()
+'''
