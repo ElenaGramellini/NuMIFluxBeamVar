@@ -1,3 +1,6 @@
 *~
+*.csv
+*.png
+*.pdf
 *.root
 *DS_Store 
