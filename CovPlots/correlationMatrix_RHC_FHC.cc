@@ -1,3 +1,24 @@
+// ---------------------------------------------------------------------------------------------------------------------------- 
+//
+// Author: Marina Reggiani-Guzzo
+// Jun 10, 2021
+//
+// This code takes the flux files for RHC and FHC and calculate the covariance and correlation matrices for numu, numubar, 
+// nue and nuebar in both cases. You should make sure the information in the "input information" is correct for your case.
+//
+// The code works as follows:
+//
+// 1. It imports the flux of the universes for a given hadron production mode (selected in the input information) and the 
+//    CV flux from the input files
+//
+// 2. The it creates a "stitched" histogram for each universe and for the CV. Meaning, it creates a second histogram
+//    that will be equivalent to placing FHC_numu-FHC_numubar-FHC_nue-FHC_nuebar-RHC_numu-RHC_numubar-RHC_nue-RHC_nuebar
+//    next to each other.
+//
+// 3. Once the stitched histograms exist, we can then calculate the covariance and correlation matrices, and save them
+//
+// ----------------------------------------------------------------------------------------------------------------------------
+
 #include <TFile.h>
 #include <TH1D.h>
 
@@ -92,11 +113,19 @@ void correlationMatrix_RHC_FHC(){
     // --- input information
     // ---------------------
 
-    std::string fhcFileName = "../files/output_uboone_fhc_run0_merged.root";
-    std::string rhcFileName = "../files/output_uboone_rhc_run0_merged.root";
-    int run_period = 1;                      // run number used for printing a watermark on the plot
-    std::string hd_mode = "UBPPFX";          // hadron production mode 
-    int nuniverses = 600;                    // number of universes
+    std::string fhcFileName = "../files/output_uboone_fhc_run0_merged.root"; // path in the gpvm: /uboone/data/users/kmistry/work/PPFX/uboone/beamline_zero_threshold_v46/FHC/sept/output_uboone_fhc_run0_merged.root
+    std::string rhcFileName = "../files/output_uboone_rhc_run0_merged.root"; // path in the gpvm/uboone/data/users/kmistry/work/PPFX/uboone/beamline_zero_threshold_v46/RHC/output_uboone_rhc_run0_merged.root
+    int run_period = 1;                                                      // run number
+    std::string hd_mode = "ms_UBPPFX";                                       // hadron production mode: mippk_PPFXMIPPKaon, mipppi_PPFXMIPPPion, other_PPFXOther, targatt_PPFXTargAtten, think_PPFXThinKaon, thinmes_PPFXThinkMeson
+                                                                             //                         thinnpi_PPFXThinNeutronPion, thinna_PPFXThinNucA, thinn_PPFXThinNuc, thinpi_PPFXThinPion, totabs_PPFXTotAbsorp, ms_UBPPFX
+    int nuniverses = 600;                                                    // number of universes
+
+    enum enum_flav { k_numu, k_numubar, k_nue, k_nuebar, k_FLAV_MAX};        // flavors that we want to use in our correlation matrix (it should have the equivalent in the line below)
+    std::vector<std::string> flav = {"numu", "numubar", "nue", "nuebar"};    // name should match to the histogram in the root file (keep it like this)
+
+    // drawing modes
+    bool draw_run_number = true;   // draw a watermark with the run number on the top left corner
+    bool draw_hd_mode    = true;   // draw a watermark with the hadron production mode on the top left corner
 
     // ----------------
     // --- import files
@@ -108,13 +137,6 @@ void correlationMatrix_RHC_FHC(){
 
     TFile *fhc_run0 = TFile::Open(fhcFileName.c_str(),"READ");
     TFile *rhc_run0 = TFile::Open(rhcFileName.c_str(),"READ");
-
-    // ----------------------------------------------------------
-    // --- enum for the models we want the correlation matrix for
-    // ----------------------------------------------------------
-
-    enum enum_flav { k_numu, k_numubar, k_nue, k_nuebar, k_FLAV_MAX};
-    std::vector<std::string> flav = {"numu", "numubar", "nue", "nuebar"}; // name should match to the histogram in the root file
 
     // --------------------------------------------
     // --- importing histograms for FHC, RHC and CV
@@ -141,11 +163,11 @@ void correlationMatrix_RHC_FHC(){
 
             // FHC
             fhc_run0->cd();
-            hist_unwrap_fhc.at(flavor).at(uni) = (TH1D*)fhc_run0->Get(Form("%s/Multisims/%s_ppfx_ms_%s_Uni_%d_AV_TPC", flav.at(flavor).c_str(), flav.at(flavor).c_str(), hd_mode.c_str(), uni));
+            hist_unwrap_fhc.at(flavor).at(uni) = (TH1D*)fhc_run0->Get(Form("%s/Multisims/%s_ppfx_%s_Uni_%d_AV_TPC", flav.at(flavor).c_str(), flav.at(flavor).c_str(), hd_mode.c_str(), uni));
 
             // RHC
             rhc_run0->cd();
-            hist_unwrap_rhc.at(flavor).at(uni) = (TH1D*)rhc_run0->Get(Form("%s/Multisims/%s_ppfx_ms_%s_Uni_%d_AV_TPC", flav.at(flavor).c_str(), flav.at(flavor).c_str(), hd_mode.c_str(), uni));
+            hist_unwrap_rhc.at(flavor).at(uni) = (TH1D*)rhc_run0->Get(Form("%s/Multisims/%s_ppfx_%s_Uni_%d_AV_TPC", flav.at(flavor).c_str(), flav.at(flavor).c_str(), hd_mode.c_str(), uni));
 
         }
 
@@ -261,13 +283,15 @@ void correlationMatrix_RHC_FHC(){
     line.at(12) = new TLine(1, numubar_bin_rhc, nuebar_bin_rhc, numubar_bin_rhc);
     line.at(13) = new TLine(1, nue_bin_rhc, nuebar_bin_rhc, nue_bin_rhc);
 
+    // create the 2D covariance matrix
     const int n_bins = hist_unwrap_stitch.at(0)->GetNbinsX();
-    TH2D* h_cov = new TH2D("","Covariance Matrix; Bin i; Bin j", n_bins, 1, n_bins+1, n_bins, 1, n_bins+1);
+    TH2D* h_cov = new TH2D("","Covariance Matrix", n_bins, 1, n_bins+1, n_bins, 1, n_bins+1);
 
     CalcCovariance(hist_unwrap_stitch, hist_unwrap_stitch_CV, h_cov);
 
     gStyle->SetOptStat(0);
 
+    // create and calculate the 2D correlation matrix
     TH2D* h_cor = (TH2D*)h_cov->Clone();
     TH2D* h_frac_cov = (TH2D*)h_cov->Clone();
     CalcCorrelation(hist_unwrap_stitch_CV, h_cov, h_cor);
@@ -287,15 +311,184 @@ void correlationMatrix_RHC_FHC(){
     gPad->SetRightMargin(0.14);
     gPad->SetTopMargin(0.14);
     gPad->SetBottomMargin(0.14);
-    h_cor->SetTitle("Correlation Matrix ;Bin i; Bin j");
+    h_cor->SetTitle("Correlation Matrix");
     h_cor->GetZaxis()->SetRangeUser(-1,1);
+    h_cor->GetXaxis()->SetLabelSize(0); // remove the label so the neutrino texts are more visible
+    h_cor->GetYaxis()->SetLabelSize(0);
     h_cor->Draw("colz");
     for (unsigned int i = 0; i< line.size(); i++){
         line.at(i)->SetLineColor(kRed+2);
-        line.at(i)->SetLineWidth(4);
+        if(i==3 || i==10) line.at(i)->SetLineWidth(4); // thicker line dividing the middle vertical and horizontal
+        else line.at(i)->SetLineWidth(2);              // the other lines are thinner
         line.at(i)->Draw();
     }
 
+    // -------------------------------------
+    // --- drawing information on the canvas
+    // -------------------------------------
+
+    TPaveText *pt = new TPaveText(0.1289398,0.8709199,0.482808,0.9124629,"blNDC");
+    pt->SetBorderSize(0);
+    pt->SetFillColor(0);
+    pt->SetFillStyle(0);
+    TText *pt_LaTex = pt->AddText(Form("%s", hd_mode.c_str()));
+    if(draw_hd_mode) pt->Draw();
+
+    pt = new TPaveText(0.760745,0.8738872,0.8667622,0.9154303,"blNDC");
+    pt->SetBorderSize(0);
+    pt->SetFillColor(0);
+    pt->SetFillStyle(0);
+    pt_LaTex = pt->AddText(Form("Run %d", run_period));
+    if(draw_run_number) pt->Draw();
+
+    // drawing neutrino labels - horizontal
+  
+    pt = new TPaveText(0.1332378,0.03264095,0.239255,0.07418398,"blNDC");
+    pt->SetBorderSize(0);
+    pt->SetFillColor(0);
+    pt->SetFillStyle(0);
+    pt_LaTex = pt->AddText("#nu_{#mu}");
+    pt->Draw();
+    
+    pt = new TPaveText(0.2277937,0.03264095,0.3338109,0.07418398,"blNDC");
+    pt->SetBorderSize(0);
+    pt->SetFillColor(0);
+    pt->SetFillStyle(0);
+    pt_LaTex = pt->AddText("#bar{#nu}_{#mu}");
+    pt->Draw();
+    
+    pt = new TPaveText(0.3180516,0.03264095,0.4240688,0.07418398,"blNDC");
+    pt->SetBorderSize(0);
+    pt->SetFillColor(0);
+    pt->SetFillStyle(0);
+    pt_LaTex = pt->AddText("#nu_{e}");
+    pt->Draw();
+    
+    pt = new TPaveText(0.4054441,0.03412463,0.5114613,0.07566766,"blNDC");
+    pt->SetBorderSize(0);
+    pt->SetFillColor(0);
+    pt->SetFillStyle(0);
+    pt_LaTex = pt->AddText("#bar{#nu}_{e}");
+    pt->Draw();
+
+    // drawing neutrino labels - vertical
+    
+    pt = new TPaveText(0.4985673,0.02967359,0.6045845,0.07121662,"blNDC");
+    pt->SetBorderSize(0);
+    pt->SetFillColor(0);
+    pt->SetFillStyle(0);
+    pt_LaTex = pt->AddText("#nu_{#mu}");
+    pt->Draw();
+    
+    pt = new TPaveText(0.5931232,0.03412463,0.6991404,0.07566766,"blNDC");
+    pt->SetBorderSize(0);
+    pt->SetFillColor(0);
+    pt->SetFillStyle(0);
+    pt_LaTex = pt->AddText("#bar{#nu}_{#mu}");
+    pt->Draw();
+    
+    pt = new TPaveText(0.6848138,0.03115727,0.7908309,0.0727003,"blNDC");
+    pt->SetBorderSize(0);
+    pt->SetFillColor(0);
+    pt->SetFillStyle(0);
+    pt_LaTex = pt->AddText("#nu_{e}");
+    pt->Draw();
+    
+    pt = new TPaveText(0.7707736,0.04005935,0.8767908,0.08160237,"blNDC");
+    pt->SetBorderSize(0);
+    pt->SetFillColor(0);
+    pt->SetFillStyle(0);
+    pt_LaTex = pt->AddText("#bar{#nu}_{e}");
+    pt->Draw();
+    
+    pt = new TPaveText(0.00286533,0.1691395,0.1088825,0.2106825,"blNDC");
+    pt->SetBorderSize(0);
+    pt->SetFillColor(0);
+    pt->SetFillStyle(0);
+    pt_LaTex = pt->AddText("#nu_{#mu}");
+    pt->Draw();
+    
+    pt = new TPaveText(0.00286533,0.2626113,0.1088825,0.3041543,"blNDC");
+    pt->SetBorderSize(0);
+    pt->SetFillColor(0);
+    pt->SetFillStyle(0);
+    pt_LaTex = pt->AddText("#bar{#nu}_{#mu}");
+    pt->Draw();
+    
+    pt = new TPaveText(0.00286533,0.3545994,0.1088825,0.3961424,"blNDC");
+    pt->SetBorderSize(0);
+    pt->SetFillColor(0);
+    pt->SetFillStyle(0);
+    pt_LaTex = pt->AddText("#nu_{e}");
+    pt->Draw();
+    
+    pt = new TPaveText(0.00286533,0.4391691,0.1088825,0.4807122,"blNDC");
+    pt->SetBorderSize(0);
+    pt->SetFillColor(0);
+    pt->SetFillStyle(0);
+    pt_LaTex = pt->AddText("#bar{#nu}_{e}");
+    pt->Draw();
+    
+    pt = new TPaveText(0.00286533,0.5281899,0.1088825,0.5697329,"blNDC");
+    pt->SetBorderSize(0);
+    pt->SetFillColor(0);
+    pt->SetFillStyle(0);
+    pt_LaTex = pt->AddText("#nu_{#mu}");
+    pt->Draw();
+    
+    pt = new TPaveText(0.00286533,0.6275964,0.1088825,0.6691395,"blNDC");
+    pt->SetBorderSize(0);
+    pt->SetFillColor(0);
+    pt->SetFillStyle(0);
+    pt_LaTex = pt->AddText("#bar{#nu}_{#mu}");
+    pt->Draw();
+    
+    pt = new TPaveText(0.00286533,0.7166172,0.1088825,0.7581602,"blNDC");
+    pt->SetBorderSize(0);
+    pt->SetFillColor(0);
+    pt->SetFillStyle(0);
+    pt_LaTex = pt->AddText("#nu_{e}");
+    pt->Draw();
+    
+    pt = new TPaveText(0.00286533,0.7997033,0.1088825,0.8412463,"blNDC");
+    pt->SetBorderSize(0);
+    pt->SetFillColor(0);
+    pt->SetFillStyle(0);
+    pt_LaTex = pt->AddText("#bar{#nu}_{e}");
+    pt->Draw();
+    
+    pt = new TPaveText(0.2750716,0.09643917,0.3810888,0.1379822,"blNDC");
+    pt->SetBorderSize(0);
+    pt->SetFillColor(0);
+    pt->SetFillStyle(0);
+    pt_LaTex = pt->AddText("FHC");
+    pt->Draw();
+    
+    pt = new TPaveText(0.6361032,0.09643917,0.7421203,0.1379822,"blNDC");
+    pt->SetBorderSize(0);
+    pt->SetFillColor(0);
+    pt->SetFillStyle(0);
+    pt_LaTex = pt->AddText("RHC");
+    pt->Draw();
+
+    pt = new TPaveText(0.05730659,0.310089,0.1633238,0.351632,"blNDC");
+    pt->SetBorderSize(0);
+    pt->SetFillColor(0);
+    pt->SetFillStyle(0);
+    pt_LaTex = pt->AddText("FHC");
+    pt_LaTex->SetTextAngle(90);
+    pt->Draw();
+    
+    pt = new TPaveText(0.05444126,0.6691395,0.1604585,0.7106825,"blNDC");
+    pt->SetBorderSize(0);
+    pt->SetFillColor(0);
+    pt->SetFillStyle(0);
+    pt_LaTex = pt->AddText("RHC");
+    pt_LaTex->SetTextAngle(90);
+    pt->Draw();
+
     c2->Print(Form("correlation_%s_run%d.pdf", hd_mode.c_str(), run_period));
+
+
 
 }
